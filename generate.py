@@ -91,8 +91,6 @@ vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to 
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
-if not args.prompts and not args.image_prompts:
-    args. prompts = "A cute, smiling, Nerdy Rodent"
 
 if args.cudnn_determinism:
    torch.backends.cudnn.deterministic = True
@@ -122,10 +120,16 @@ if args.make_video and args.make_zoom_video:
     print("Warning: Make video and make zoom video are mutually exclusive.")
     args.make_video = False
     
-# Make video steps directory
-if args.make_video or args.make_zoom_video:
-    if not os.path.exists('steps'):
-        os.mkdir('steps')
+prompts_str = ''.join([str(elem) for elem in args.prompts]).replace(' ','-')
+print(prompts_str)
+results_path = f"./results/{prompts_str}"
+# Make output directory
+if not os.path.exists('results'):
+    os.mkdir('results')
+    
+# Make output directory
+if not os.path.exists(os.path.join('results',prompts_str)):
+    os.mkdir(os.path.join('results',prompts_str))
 
 # Fallback to CPU if CUDA is not found and make sure GPU video rendering is also disabled
 # NB. May not work for AMD cards?
@@ -465,7 +469,7 @@ def resize_image(image, out_size):
 device = torch.device(args.cuda_device)
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
 jit = True if float(torch.__version__[:3]) < 1.8 else False
-perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).to(device)
+perceptor = clip.load(args.clip_model, jit=False)[0].eval().requires_grad_(False).to(device)
 
 # clock=deepcopy(perceptor.visual.positional_embedding.data)
 # perceptor.visual.positional_embedding.data = clock/clock.max()
@@ -633,7 +637,7 @@ def checkin(i, losses):
     out = synth(z)
     info = PngImagePlugin.PngInfo()
     info.add_text('comment', f'{args.prompts}')
-    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 	
+    # TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 	
 
 
 def ascend_txt():
@@ -650,10 +654,12 @@ def ascend_txt():
     for prompt in pMs:
         result.append(prompt(iii))
     
-    if args.make_video:    
+    if i % args.display_freq == 0:    
         img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
         img = np.transpose(img, (1, 2, 0))
-        imageio.imwrite('./steps/' + str(i) + '.png', np.array(img))
+        filename = os.path.join(results_path , str(i).zfill(4) + '.png')
+        imageio.imwrite(filename, np.array(img))
+
 
     return result # return loss
 
@@ -692,10 +698,16 @@ try:
                 if i % args.zoom_frequency == 0:
                     out = synth(z)
                     
+
                     # Save image
                     img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
                     img = np.transpose(img, (1, 2, 0))
-                    imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
+                    
+                    if i % args.save_every == 0:
+                        filename = os.path.join(results_path , str(i).zfill(4) + '.png')
+                        imageio.imwrite(filename, np.array(img))
+
+                    # imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
 
                     # Time to start zooming?                    
                     if args.zoom_start <= i:

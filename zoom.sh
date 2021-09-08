@@ -8,7 +8,7 @@ MAX_EPOCHS=$3
 
 LR=0.1
 OPTIMISER=Adam
-MAX_ITERATIONS=25
+MAX_ITERATIONS=5
 SEED=`shuf -i 1-9999999999 -n 1` # Keep the same seed each epoch for more deterministic runs
 
 # Extract
